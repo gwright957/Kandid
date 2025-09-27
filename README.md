@@ -9,6 +9,7 @@ Realtime-ready Kandid now ships with a small Express API and SQLite database so 
 - Capture flow supports file upload or camera capture and pushes the drop to the recipient's inbox plus (optionally) the public feed.
 - Location updates POST back to the API so "nearby" lists stay consistent across clients.
 - Demo data (Ari, Mina, Devon) is seeded automatically on first run.
+- Weekly "Hunters vs. Ghosts" contest mode with automatic role assignment, hunt-specific challenges, proximity alerts, capture tracking, and BeKandid opt-out mode.
 
 ## Stack
 - **Server:** Node.js, Express, SQLite, JWT, bcrypt
@@ -50,6 +51,7 @@ Realtime-ready Kandid now ships with a small Express API and SQLite database so 
 | `POST` | `/api/follows/:id/toggle` | Follow/unfollow a creator |
 | `POST` | `/api/inbox/mark-read` | Mark one or more inbox messages as read |
 | `POST` | `/api/users/me/location` | Update the signed-in user's location |
+| `POST` | `/api/users/me/bekandid` | Toggle BeKandid mode (opt out of contests) |
 
 All mutating routes return a fresh state payload so the client can stay in sync with minimal bookkeeping.
 
@@ -62,5 +64,11 @@ All mutating routes return a fresh state payload so the client can stay in sync 
 - Passwords are hashed, but JWT secret rotation, refresh tokens, rate limiting, and CSRF protections are still TODO for production.
 - Media is stored as base64 strings; swap to object storage (S3, GCS, Supabase Storage) before real usage.
 - Consider moving location and inbox events to real-time channels (WebSockets, Pusher, Supabase Realtime) for instant updates.
+
+## Contest Mode Overview
+- The contest resets every Sunday at 8 PM UTC. Eligible users are randomly assigned to either **Hunters** or **Ghosts** (BeKandid users sit out).
+- Hunters receive proximity alerts when ghosts are nearby and can submit challenge-themed captures via the Capture form to climb the leaderboard.
+- Ghosts gain rewards by avoiding capture and keeping on the move—staying in one location for too long triggers a camping warning that can lead to disqualification.
+- BeKandid Mode lets users volunteer for candid shots without entering the contest; their drops still arrive privately and can generate upvotes and rewards for both photographer and subject.
 
 Enjoy capturing candid moments together! 🎞️

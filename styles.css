@@ -869,6 +869,86 @@ button:focus-visible {
   background: rgba(15, 22, 40, 0.6);
 }
 
+.contest-banner {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.contest-banner.hidden {
+  display: none;
+}
+
+.contest-banner h3 {
+  margin: 0 0 0.5rem;
+}
+
+.contest-leaderboards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.contest-leaderboards h4 {
+  margin-bottom: 0.5rem;
+}
+
+.contest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.contest-capture {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.contest-capture.hidden {
+  display: none;
+}
+
+.contest-capture__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.profile__settings {
+  margin-bottom: 1.5rem;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.profile-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profile-setting-row h4 {
+  margin: 0;
+}
+
+.profile-setting-row p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .profile-link {
   color: var(--accent-secondary);
   cursor: pointer;

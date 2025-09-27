@@ -99,6 +99,24 @@
         <button id="refresh-feed" class="icon-btn" title="Refresh feed">↻</button>
       </div>
     </div>
+    <section id="contest-banner" class="contest-banner hidden">
+      <div>
+        <h3>Contest Mode</h3>
+        <p id="contest-challenge"></p>
+        <p id="contest-role" class="muted"></p>
+        <p id="contest-countdown" class="muted"></p>
+      </div>
+      <div class="contest-leaderboards">
+        <div>
+          <h4>Top Hunters</h4>
+          <ol id="contest-hunter-board" class="contest-list"></ol>
+        </div>
+        <div>
+          <h4>Remaining Ghosts</h4>
+          <ul id="contest-ghost-board" class="contest-list"></ul>
+        </div>
+      </div>
+    </section>
     <div id="feed-grid" class="feed-grid"></div>
   </template>
 
@@ -116,6 +134,13 @@
             <input type="file" id="capture-file" accept="image/*" />
           </label>
           <button type="button" id="capture-camera" class="secondary">Use Camera</button>
+        </div>
+        <div id="contest-capture-section" class="contest-capture hidden">
+          <p class="panel__hint">Weekly Challenge: <strong id="contest-challenge-text"></strong></p>
+          <label class="contest-capture__toggle">
+            <input type="checkbox" id="capture-contest" /> Submit for contest leaderboard
+          </label>
+          <p id="contest-capture-note" class="muted"></p>
         </div>
         <label>Caption
           <textarea id="capture-caption" rows="3" placeholder="What makes this moment special?"></textarea>
@@ -138,12 +163,22 @@
           <h2 id="profile-name"></h2>
           <p id="profile-bio" class="muted"></p>
           <p id="profile-meta" class="muted"></p>
+          <p id="profile-contest-role" class="muted"></p>
         </div>
         <div class="profile__actions">
           <button id="profile-follow-toggle" class="primary profile-follow-btn hidden">Follow</button>
           <button id="logout" class="secondary">Log Out</button>
         </div>
       </div>
+      <section class="profile__settings">
+        <div class="profile-setting-row">
+          <div>
+            <h4>BeKandid Mode</h4>
+            <p class="muted">Opt in to candid drops and sit out the weekly hunt.</p>
+          </div>
+          <button id="profile-bekandid-toggle" class="secondary">Enable</button>
+        </div>
+      </section>
       <section class="profile__stats">
         <div>
           <strong id="profile-followers">0</strong>

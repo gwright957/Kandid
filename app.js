@@ -127,12 +127,19 @@ const api = {
       body: { lat, lng },
     });
   },
+  toggleBeKandid(enabled) {
+    return apiRequest('/api/users/me/bekandid', {
+      method: 'POST',
+      body: { enabled },
+    });
+  },
 };
 
 const state = {
   users: [],
   posts: [],
   inbox: {},
+  contest: null,
   session: null,
   view: 'nearby',
   profileUserId: null,
@@ -145,6 +152,7 @@ function applyServerState(payload, { skipRender = false } = {}) {
   state.users = Array.isArray(payload.users) ? payload.users : [];
   state.posts = Array.isArray(payload.posts) ? payload.posts : [];
   state.inbox = payload.inbox && typeof payload.inbox === 'object' ? payload.inbox : {};
+  state.contest = payload.contest || null;
   if (!skipRender) {
     updateAllViews();
   }
@@ -551,6 +559,10 @@ function setupCaptureView() {
   const canvas = document.querySelector('#camera-canvas');
   const captionField = document.querySelector('#capture-caption');
   const submitBtn = form?.querySelector('button[type="submit"]');
+  const contestSection = document.querySelector('#contest-capture-section');
+  const contestCheckbox = document.querySelector('#capture-contest');
+  const contestNote = document.querySelector('#contest-capture-note');
+  const contestChallengeText = document.querySelector('#contest-challenge-text');
 
   if (!form || !targetSelect || !fileInput) {
     return;
@@ -558,10 +570,41 @@ function setupCaptureView() {
 
   populateTargetSelect(targetSelect);
 
+  const refreshContestCaptureUI = () => {
+    if (!contestSection || !contestCheckbox || !contestChallengeText || !contestNote) return;
+    const contest = state.contest;
+    const currentUser = getCurrentUser();
+    if (!contest || !currentUser || currentUser.contestRole !== 'hunter') {
+      contestSection.classList.add('hidden');
+      contestCheckbox.checked = false;
+      contestCheckbox.disabled = true;
+      contestNote.textContent = 'Contest captures are reserved for weekly hunters.';
+      return;
+    }
+    contestSection.classList.remove('hidden');
+    contestChallengeText.textContent = contest.challenge;
+    contestCheckbox.disabled = false;
+    contestCheckbox.checked = false;
+    contestNote.textContent = 'Select an active ghost and check the box to count this capture.';
+    const targetId = targetSelect.value;
+    const isGhostTarget = Boolean(targetId && contest.survivingGhosts?.includes(targetId));
+    if (!isGhostTarget) {
+      contestCheckbox.disabled = true;
+      contestNote.textContent = 'Pick a surviving ghost to enable contest submission.';
+    }
+  };
+
+  refreshContestCaptureUI();
+  window.__refreshContestCaptureUI = refreshContestCaptureUI;
+
   fileInput.addEventListener('change', () => {
     state.cameraImage = null;
     stopCamera(video);
     canvas.classList.add('hidden');
+  });
+
+  targetSelect.addEventListener('change', () => {
+    refreshContestCaptureUI();
   });
 
   form.addEventListener('submit', async (event) => {
@@ -575,6 +618,20 @@ function setupCaptureView() {
 
     if (!targetId) {
       alert('Select who you spotted.');
+      return;
+    }
+
+    const contest = state.contest;
+    const contestCaptureRequested = Boolean(
+      contest &&
+        contestCheckbox &&
+        !contestCheckbox.disabled &&
+        contestCheckbox.checked &&
+        (contest.survivingGhosts || []).includes(targetId)
+    );
+
+    if (contestCaptureRequested && currentUser.contestRole !== 'hunter') {
+      alert('Only hunters can submit contest captures.');
       return;
     }
 
@@ -593,19 +650,25 @@ function setupCaptureView() {
 
     submitBtn?.setAttribute('disabled', 'true');
     try {
+      const payload = {
+        recipientId: targetId,
+        image: imageData,
+        caption,
+        visibility: contestCaptureRequested || repost ? 'public' : 'private',
+      };
+      if (contestCaptureRequested) {
+        payload.contestCapture = true;
+        payload.contestChallenge = contest?.challenge || '';
+      }
       await updateStateFrom(
-        api.createPost({
-          recipientId: targetId,
-          image: imageData,
-          caption,
-          visibility: repost ? 'public' : 'private',
-        })
+        api.createPost(payload)
       );
       state.cameraImage = null;
       fileInput.value = '';
       if (captionField) captionField.value = '';
       form.reset();
       populateTargetSelect(targetSelect);
+      refreshContestCaptureUI();
       alert('Kandid sent!');
     } catch (error) {
       console.error('Failed to send Kandid', error);
@@ -687,6 +750,27 @@ function setupProfileView() {
       toggleFollow(targetId, followToggle);
     });
   }
+  const bekandidToggle = document.querySelector('#profile-bekandid-toggle');
+  if (bekandidToggle) {
+    bekandidToggle.addEventListener('click', async () => {
+      const current = getCurrentUser();
+      if (!current) {
+        alert('Log in to change BeKandid mode.');
+        return;
+      }
+      const nextStatus = !current.bekandidEnabled;
+      bekandidToggle.setAttribute('disabled', 'true');
+      try {
+        await updateStateFrom(api.toggleBeKandid(nextStatus));
+        alert(`BeKandid mode ${nextStatus ? 'enabled' : 'disabled'}!`);
+      } catch (error) {
+        console.error('Failed to toggle BeKandid', error);
+        alert(error.message || 'Could not update BeKandid mode.');
+      } finally {
+        bekandidToggle.removeAttribute('disabled');
+      }
+    });
+  }
 }
 
 function setupInboxView() {
@@ -722,7 +806,14 @@ function populateTargetSelect(select) {
   candidates.forEach((user) => {
     const opt = document.createElement('option');
     opt.value = user.id;
-    opt.textContent = `${user.displayName} ${user.homeCity ? `· ${user.homeCity}` : ''}`;
+    const roleLabel = user.bekandidEnabled
+      ? '• BeKandid'
+      : user.contestRole === 'ghost'
+      ? '• Ghost 👻'
+      : user.contestRole === 'hunter'
+      ? '• Hunter 🕵️'
+      : '';
+    opt.textContent = `${user.displayName} ${user.homeCity ? `· ${user.homeCity}` : ''} ${roleLabel}`.trim();
     select.appendChild(opt);
   });
 }
@@ -758,7 +849,15 @@ function renderNearby() {
       bindProfileNavigation(name, user.id, 'text');
       const meta = document.createElement('p');
       meta.className = 'muted';
-      meta.textContent = `${user.homeCity || 'Location unknown'} • ${distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`} away`;
+      const roleLabel = user.bekandidEnabled
+        ? 'BeKandid'
+        : user.contestRole === 'ghost'
+        ? 'Ghost'
+        : user.contestRole === 'hunter'
+        ? 'Hunter'
+        : null;
+      const distanceLabel = distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`;
+      meta.textContent = `${user.homeCity || 'Location unknown'} • ${distanceLabel} away${roleLabel ? ` • ${roleLabel}` : ''}`;
 
       info.appendChild(name);
       info.appendChild(meta);
@@ -783,6 +882,74 @@ function isFollowing(current, targetId) {
   return current.following?.includes(targetId);
 }
 
+function renderContestBanner() {
+  const banner = document.querySelector('#contest-banner');
+  const challengeEl = document.querySelector('#contest-challenge');
+  const roleEl = document.querySelector('#contest-role');
+  const countdownEl = document.querySelector('#contest-countdown');
+  const hunterBoard = document.querySelector('#contest-hunter-board');
+  const ghostBoard = document.querySelector('#contest-ghost-board');
+  if (!banner || !challengeEl || !roleEl || !countdownEl || !hunterBoard || !ghostBoard) return;
+  const contest = state.contest;
+  if (!contest) {
+    banner.classList.add('hidden');
+    hunterBoard.innerHTML = '';
+    ghostBoard.innerHTML = '';
+    return;
+  }
+  banner.classList.remove('hidden');
+  challengeEl.textContent = contest.challenge;
+  const currentUser = getCurrentUser();
+  if (currentUser?.bekandidEnabled) {
+    roleEl.textContent = 'You are in BeKandid mode – enjoy the candid drops!';
+  } else if (currentUser?.contestRole === 'hunter') {
+    roleEl.textContent = 'You are a Hunter this week. Track ghosts and complete the challenge!';
+  } else if (currentUser?.contestRole === 'ghost') {
+    roleEl.textContent = 'You are a Ghost. Stay unseen until the week ends!';
+  } else {
+    roleEl.textContent = 'Contest roles will be assigned at the start of the next cycle.';
+  }
+  if (currentUser?.contestStats?.campingViolation) {
+    roleEl.textContent += ' ⚠️ Move around or risk disqualification!';
+  }
+
+  const now = Date.now();
+  const remaining = Math.max(contest.endsAt - now, 0);
+  const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  countdownEl.textContent = `Ends in ${days}d ${hours}h`;
+
+  hunterBoard.innerHTML = '';
+  const hunters = contest.hunterLeaderboard?.slice(0, 5) || [];
+  if (!hunters.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No captures yet.';
+    hunterBoard.appendChild(empty);
+  } else {
+    hunters.forEach((entry, index) => {
+      const hunter = state.users.find((user) => user.id === entry.userId);
+      const li = document.createElement('li');
+      li.textContent = `${index + 1}. ${hunter ? hunter.displayName : 'Unknown'} — ${entry.captures} capture${entry.captures === 1 ? '' : 's'}`;
+      hunterBoard.appendChild(li);
+    });
+  }
+
+  ghostBoard.innerHTML = '';
+  const ghosts = contest.survivingGhosts || [];
+  if (!ghosts.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No ghosts remain.';
+    ghostBoard.appendChild(empty);
+  } else {
+    ghosts.slice(0, 8).forEach((ghostId) => {
+      const ghost = state.users.find((user) => user.id === ghostId);
+      const li = document.createElement('li');
+      li.textContent = ghost ? ghost.displayName : 'Unknown ghost';
+      ghostBoard.appendChild(li);
+    });
+  }
+}
+
 async function toggleFollow(targetId, button) {
   const current = getCurrentUser();
   if (!current) {
@@ -805,6 +972,7 @@ function renderFeed() {
   const filter = document.querySelector('#feed-filter');
   if (!grid || !filter) return;
 
+  renderContestBanner();
   grid.innerHTML = '';
   const current = getCurrentUser();
   const filterValue = filter.value;
@@ -1084,11 +1252,30 @@ function renderProfile() {
   const followingList = document.querySelector('#profile-following-list');
   const followToggle = document.querySelector('#profile-follow-toggle');
   const logoutBtn = document.querySelector('#logout');
+  const contestRoleEl = document.querySelector('#profile-contest-role');
+  const bekandidToggle = document.querySelector('#profile-bekandid-toggle');
 
   const isSelf = viewer && viewer.id === profileUser.id;
 
   if (logoutBtn) {
     logoutBtn.classList.toggle('hidden', !isSelf);
+  }
+
+  if (bekandidToggle) {
+    bekandidToggle.classList.toggle('hidden', !isSelf);
+    if (isSelf) {
+      bekandidToggle.textContent = viewer.bekandidEnabled ? 'Disable BeKandid' : 'Enable BeKandid';
+    }
+  }
+
+  if (contestRoleEl) {
+    if (profileUser.bekandidEnabled) {
+      contestRoleEl.textContent = 'BeKandid Mode: ON';
+    } else if (profileUser.contestRole) {
+      contestRoleEl.textContent = `Contest role: ${profileUser.contestRole === 'hunter' ? 'Hunter' : 'Ghost'}`;
+    } else {
+      contestRoleEl.textContent = 'Contest role: Pending';
+    }
   }
 
   if (followToggle) {
@@ -1291,6 +1478,20 @@ function renderInbox() {
     item.appendChild(avatar);
     item.appendChild(block);
 
+    const addBadgeIfNeeded = () => {
+      if (!message.read) {
+        const badge = document.createElement('span');
+        badge.textContent = 'New';
+        badge.style.background = 'var(--accent)';
+        badge.style.color = '#0f172a';
+        badge.style.padding = '0.2rem 0.6rem';
+        badge.style.borderRadius = '999px';
+        badge.style.fontSize = '0.75rem';
+        badge.style.marginLeft = '0.6rem';
+        block.appendChild(badge);
+      }
+    };
+
     const markMessageRead = async () => {
       if (!message.read) {
         try {
@@ -1301,6 +1502,8 @@ function renderInbox() {
       }
     };
 
+    const viewer = getCurrentUser();
+
     if (message.type === 'follow') {
       title.textContent = `${sender.displayName} started following you`;
       bindProfileNavigation(title, sender.id, 'text');
@@ -1309,7 +1512,6 @@ function renderInbox() {
       actions.style.display = 'flex';
       actions.style.gap = '0.5rem';
 
-      const viewer = getCurrentUser();
       const canFollowBack = viewer && viewer.id !== sender.id;
       if (canFollowBack) {
         const currentlyFollowing = isFollowing(viewer, sender.id);
@@ -1343,57 +1545,139 @@ function renderInbox() {
           openProfileFromInbox();
         }
       });
-    } else {
-      const post = state.posts.find((p) => p.id === message.postId);
-      if (!post) return;
+      addBadgeIfNeeded();
+      list.appendChild(item);
+      return;
+    }
 
-      title.textContent = `${sender.displayName} dropped you a Kandid!`;
-      bindProfileNavigation(title, sender.id, 'text');
-
-      const preview = document.createElement('img');
-      preview.src = post.image;
-      preview.alt = 'Kandid preview';
-      preview.style.width = '84px';
-      preview.style.height = '84px';
-      preview.style.objectFit = 'cover';
-      preview.style.borderRadius = '12px';
-      preview.style.marginLeft = 'auto';
-
-      item.appendChild(preview);
-
+    if (message.type === 'contest_alert' || message.type === 'contest_warning') {
+      title.textContent = message.message || `${sender.displayName} is nearby!`;
       item.style.cursor = 'pointer';
-      item.title = 'Open candid';
       item.tabIndex = 0;
       item.setAttribute('role', 'button');
-      const openMessage = async () => {
-        openPhotoModal({
-          image: post.image,
-          caption: post.caption || `${sender.displayName} dropped you a Kandid`,
-          meta: `Sent by ${sender.displayName} • ${timeAgo(message.createdAt)}`,
-        });
+      const acknowledge = async () => {
         await markMessageRead();
       };
-      item.addEventListener('click', openMessage);
+      item.addEventListener('click', acknowledge);
       item.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          openMessage();
+          acknowledge();
         }
       });
+      addBadgeIfNeeded();
+      list.appendChild(item);
+      return;
     }
 
-    if (!message.read) {
-      const badge = document.createElement('span');
-      badge.textContent = 'New';
-      badge.style.background = 'var(--accent)';
-      badge.style.color = '#0f172a';
-      badge.style.padding = '0.2rem 0.6rem';
-      badge.style.borderRadius = '999px';
-      badge.style.fontSize = '0.75rem';
-      badge.style.marginLeft = '0.6rem';
-      block.appendChild(badge);
+    const post = message.postId ? state.posts.find((p) => p.id === message.postId) : null;
+    if (message.type === 'contest_capture') {
+      title.textContent = 'Capture logged!';
+      block.appendChild(document.createTextNode(message.message || 'Contest capture submitted.'));
+      if (post) {
+        const openDetails = async () => {
+          openPhotoModal({
+            image: post.image,
+            caption: post.caption || 'Contest capture',
+            meta: `Submitted ${timeAgo(message.createdAt)}`,
+          });
+          await markMessageRead();
+        };
+        item.style.cursor = 'pointer';
+        item.title = 'View capture';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.addEventListener('click', openDetails);
+        item.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openDetails();
+          }
+        });
+      }
+      addBadgeIfNeeded();
+      list.appendChild(item);
+      return;
     }
 
+    if (message.type === 'contest_captured') {
+      title.textContent = `${sender.displayName} captured you!`;
+      if (post) {
+        const preview = document.createElement('img');
+        preview.src = post.image;
+        preview.alt = 'Contest capture preview';
+        preview.style.width = '84px';
+        preview.style.height = '84px';
+        preview.style.objectFit = 'cover';
+        preview.style.borderRadius = '12px';
+        preview.style.marginLeft = 'auto';
+        item.appendChild(preview);
+
+        const openCapture = async () => {
+          openPhotoModal({
+            image: post.image,
+            caption: post.caption || 'You were captured!',
+            meta: `Captured by ${sender.displayName} • ${timeAgo(message.createdAt)}`,
+          });
+          await markMessageRead();
+        };
+        item.style.cursor = 'pointer';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.addEventListener('click', openCapture);
+        item.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openCapture();
+          }
+        });
+      }
+      addBadgeIfNeeded();
+      list.appendChild(item);
+      return;
+    }
+
+    // Default: drop/bekandid drop or other post-based message
+    if (!post) return;
+    if (message.type === 'bekandid_drop') {
+      title.textContent = `${sender.displayName} captured you candidly!`;
+    } else {
+      title.textContent = `${sender.displayName} dropped you a Kandid!`;
+    }
+    bindProfileNavigation(title, sender.id, 'text');
+
+    const preview = document.createElement('img');
+    preview.src = post.image;
+    preview.alt = 'Kandid preview';
+    preview.style.width = '84px';
+    preview.style.height = '84px';
+    preview.style.objectFit = 'cover';
+    preview.style.borderRadius = '12px';
+    preview.style.marginLeft = 'auto';
+
+    item.appendChild(preview);
+
+    item.style.cursor = 'pointer';
+    item.title = 'Open candid';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    const openMessage = async () => {
+      openPhotoModal({
+        image: post.image,
+        caption: post.caption || `${sender.displayName} dropped you a Kandid`,
+        meta: `Sent by ${sender.displayName} • ${timeAgo(message.createdAt)}`,
+      });
+      await markMessageRead();
+    };
+    item.addEventListener('click', openMessage);
+    item.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openMessage();
+      }
+    });
+
+    addBadgeIfNeeded();
     list.appendChild(item);
   });
 }
@@ -1404,6 +1688,9 @@ function updateAllViews() {
   renderProfile();
   renderInbox();
   populateTargetSelect(document.querySelector('#capture-target'));
+  if (typeof window !== 'undefined' && typeof window.__refreshContestCaptureUI === 'function') {
+    window.__refreshContestCaptureUI();
+  }
 }
 
 async function fileToDataURL(file) {

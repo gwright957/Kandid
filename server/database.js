@@ -35,7 +35,8 @@ async function initializeDatabase() {
       location_lat REAL,
       location_lng REAL,
       location_updated_at INTEGER,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      bekandid_enabled INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS follows (
@@ -93,12 +94,56 @@ async function initializeDatabase() {
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
       FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS contest_weeks (
+      id TEXT PRIMARY KEY,
+      starts_at INTEGER NOT NULL,
+      ends_at INTEGER NOT NULL,
+      challenge TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS contest_assignments (
+      contest_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      captures INTEGER NOT NULL DEFAULT 0,
+      survival_flag INTEGER NOT NULL DEFAULT 1,
+      camping_violation INTEGER NOT NULL DEFAULT 0,
+      last_location_lat REAL,
+      last_location_lng REAL,
+      last_move_at INTEGER,
+      PRIMARY KEY (contest_id, user_id),
+      FOREIGN KEY (contest_id) REFERENCES contest_weeks(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS contest_captures (
+      id TEXT PRIMARY KEY,
+      contest_id TEXT NOT NULL,
+      hunter_id TEXT NOT NULL,
+      ghost_id TEXT NOT NULL,
+      post_id TEXT NOT NULL,
+      challenge TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (contest_id) REFERENCES contest_weeks(id) ON DELETE CASCADE,
+      FOREIGN KEY (hunter_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (ghost_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    );
   `);
 
+  await migrateUsersTableIfNeeded(db);
   await migrateInboxTableIfNeeded(db);
   await seedIfNeeded(db);
 
   return db;
+}
+
+async function migrateUsersTableIfNeeded(db) {
+  const columns = await db.all('PRAGMA table_info(users)');
+  const hasBeKandid = columns.some((column) => column.name === 'bekandid_enabled');
+  if (hasBeKandid) return;
+  await db.exec('ALTER TABLE users ADD COLUMN bekandid_enabled INTEGER NOT NULL DEFAULT 0;');
 }
 
 async function migrateInboxTableIfNeeded(db) {
@@ -305,6 +350,7 @@ function mapUserRow(row) {
         }
       : null,
     createdAt: row.created_at,
+    bekandidEnabled: Boolean(row.bekandid_enabled),
   };
 }
 
