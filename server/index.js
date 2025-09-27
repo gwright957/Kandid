@@ -17,9 +17,12 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
   : true;
 
+const staticRoot = path.join(__dirname, '..');
+
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static(staticRoot));
 
 let db;
 
@@ -403,7 +406,13 @@ app.post('/api/users/me/location', requireAuth, async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, '..')));
+
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  res.sendFile(path.join(staticRoot, 'index.html'));
+});
 
 initializeDatabase()
   .then((database) => {
