@@ -80,19 +80,64 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS inbox_messages (
       id TEXT PRIMARY KEY,
       recipient_id TEXT NOT NULL,
-      post_id TEXT NOT NULL,
+      post_id TEXT,
       sender_id TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       read INTEGER NOT NULL DEFAULT 0,
+      type TEXT NOT NULL DEFAULT 'drop',
+      message TEXT,
       FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
       FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 
+  await migrateInboxTableIfNeeded(db);
   await seedIfNeeded(db);
 
   return db;
+}
+
+async function migrateInboxTableIfNeeded(db) {
+  const columns = await db.all('PRAGMA table_info(inbox_messages)');
+  const hasTypeColumn = columns.some((column) => column.name === 'type');
+  const postColumn = columns.find((column) => column.name === 'post_id');
+  const postAllowsNull = postColumn ? postColumn.notnull === 0 : false;
+  if (hasTypeColumn && postAllowsNull) {
+    return;
+  }
+
+  await db.exec('BEGIN TRANSACTION;');
+  try {
+    await db.exec(`
+      CREATE TABLE inbox_messages_new (
+        id TEXT PRIMARY KEY,
+        recipient_id TEXT NOT NULL,
+        post_id TEXT,
+        sender_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        type TEXT NOT NULL DEFAULT 'drop',
+        message TEXT,
+        FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+
+    await db.exec(`
+      INSERT INTO inbox_messages_new (id, recipient_id, post_id, sender_id, created_at, read, type, message)
+      SELECT id, recipient_id, post_id, sender_id, created_at, read, 'drop', NULL
+      FROM inbox_messages;
+    `);
+
+    await db.exec('DROP TABLE inbox_messages;');
+    await db.exec('ALTER TABLE inbox_messages_new RENAME TO inbox_messages;');
+    await db.exec('COMMIT;');
+  } catch (error) {
+    await db.exec('ROLLBACK;');
+    throw error;
+  }
 }
 
 async function seedIfNeeded(db) {

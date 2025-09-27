@@ -1267,9 +1267,8 @@ function renderInbox() {
   }
 
   messages.forEach((message) => {
-    const post = state.posts.find((p) => p.id === message.postId);
     const sender = state.users.find((u) => u.id === message.senderId);
-    if (!post || !sender) return;
+    if (!sender) return;
 
     const item = document.createElement('li');
     item.className = 'list-item';
@@ -1282,27 +1281,106 @@ function renderInbox() {
 
     const block = document.createElement('div');
     const title = document.createElement('strong');
-    title.textContent = `${sender.displayName} dropped you a Kandid!`;
-    bindProfileNavigation(title, sender.id, 'text');
     const meta = document.createElement('p');
     meta.className = 'muted';
     meta.textContent = timeAgo(message.createdAt);
-
-    const preview = document.createElement('img');
-    preview.src = post.image;
-    preview.alt = 'Kandid preview';
-    preview.style.width = '84px';
-    preview.style.height = '84px';
-    preview.style.objectFit = 'cover';
-    preview.style.borderRadius = '12px';
-    preview.style.marginLeft = 'auto';
 
     block.appendChild(title);
     block.appendChild(meta);
 
     item.appendChild(avatar);
     item.appendChild(block);
-    item.appendChild(preview);
+
+    const markMessageRead = async () => {
+      if (!message.read) {
+        try {
+          await updateStateFrom(api.markInboxMessages([message.id]));
+        } catch (error) {
+          console.error('Failed to mark message as read', error);
+        }
+      }
+    };
+
+    if (message.type === 'follow') {
+      title.textContent = `${sender.displayName} started following you`;
+      bindProfileNavigation(title, sender.id, 'text');
+
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '0.5rem';
+
+      const viewer = getCurrentUser();
+      const canFollowBack = viewer && viewer.id !== sender.id;
+      if (canFollowBack) {
+        const currentlyFollowing = isFollowing(viewer, sender.id);
+        const followBtn = document.createElement('button');
+        followBtn.className = currentlyFollowing ? 'secondary following' : 'primary';
+        followBtn.textContent = currentlyFollowing ? 'Following' : 'Follow back';
+        followBtn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          await toggleFollow(sender.id, followBtn);
+          await markMessageRead();
+        });
+        actions.appendChild(followBtn);
+      }
+
+      if (actions.children.length) {
+        block.appendChild(actions);
+      }
+
+      item.style.cursor = 'pointer';
+      item.title = 'View profile';
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+      const openProfileFromInbox = async () => {
+        showUserProfile(sender.id);
+        await markMessageRead();
+      };
+      item.addEventListener('click', openProfileFromInbox);
+      item.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openProfileFromInbox();
+        }
+      });
+    } else {
+      const post = state.posts.find((p) => p.id === message.postId);
+      if (!post) return;
+
+      title.textContent = `${sender.displayName} dropped you a Kandid!`;
+      bindProfileNavigation(title, sender.id, 'text');
+
+      const preview = document.createElement('img');
+      preview.src = post.image;
+      preview.alt = 'Kandid preview';
+      preview.style.width = '84px';
+      preview.style.height = '84px';
+      preview.style.objectFit = 'cover';
+      preview.style.borderRadius = '12px';
+      preview.style.marginLeft = 'auto';
+
+      item.appendChild(preview);
+
+      item.style.cursor = 'pointer';
+      item.title = 'Open candid';
+      item.tabIndex = 0;
+      item.setAttribute('role', 'button');
+      const openMessage = async () => {
+        openPhotoModal({
+          image: post.image,
+          caption: post.caption || `${sender.displayName} dropped you a Kandid`,
+          meta: `Sent by ${sender.displayName} • ${timeAgo(message.createdAt)}`,
+        });
+        await markMessageRead();
+      };
+      item.addEventListener('click', openMessage);
+      item.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openMessage();
+        }
+      });
+    }
 
     if (!message.read) {
       const badge = document.createElement('span');
@@ -1315,32 +1393,6 @@ function renderInbox() {
       badge.style.marginLeft = '0.6rem';
       block.appendChild(badge);
     }
-
-    item.style.cursor = 'pointer';
-    item.title = 'Open candid';
-    item.tabIndex = 0;
-    item.setAttribute('role', 'button');
-    const openMessage = async () => {
-      openPhotoModal({
-        image: post.image,
-        caption: post.caption || `${sender.displayName} dropped you a Kandid`,
-        meta: `Sent by ${sender.displayName} • ${timeAgo(message.createdAt)}`,
-      });
-      if (!message.read) {
-        try {
-          await updateStateFrom(api.markInboxMessages([message.id]));
-        } catch (error) {
-          console.error('Failed to mark message as read', error);
-        }
-      }
-    };
-    item.addEventListener('click', openMessage);
-    item.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openMessage();
-      }
-    });
 
     list.appendChild(item);
   });

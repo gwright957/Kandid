@@ -129,10 +129,12 @@ async function buildState() {
     if (!inbox[row.recipient_id]) inbox[row.recipient_id] = [];
     inbox[row.recipient_id].push({
       id: row.id,
-      postId: row.post_id,
+      postId: row.post_id || null,
       senderId: row.sender_id,
       createdAt: row.created_at,
       read: Boolean(row.read),
+      type: row.type || 'drop',
+      message: row.message || null,
     });
   });
 
@@ -232,9 +234,15 @@ app.post('/api/follows/:userId/toggle', requireAuth, async (req, res) => {
     if (existing) {
       await db.run('DELETE FROM follows WHERE follower_id = ? AND following_id = ?', [currentId, targetId]);
     } else {
+      const now = Date.now();
       await db.run(
         'INSERT INTO follows (follower_id, following_id, created_at) VALUES (?, ?, ?)',
-        [currentId, targetId, Date.now()]
+        [currentId, targetId, now]
+      );
+      await db.run(
+        `INSERT INTO inbox_messages (id, recipient_id, post_id, sender_id, created_at, read, type, message)
+         VALUES (?, ?, NULL, ?, ?, 0, 'follow', NULL)`,
+        [createId(), targetId, currentId, now]
       );
     }
     const state = await buildState();
