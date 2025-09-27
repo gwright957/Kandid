@@ -5,7 +5,10 @@ const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'kandid.sqlite');
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
+const persistentRoot = process.env.DATABASE_DIR
+  || (fs.existsSync('/data') ? '/data' : DEFAULT_DATA_DIR);
+const DB_PATH = process.env.DATABASE_PATH || path.join(persistentRoot, 'kandid.sqlite');
 
 function createId() {
   return crypto.randomUUID();

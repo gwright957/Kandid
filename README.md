@@ -55,7 +55,7 @@ All mutating routes return a fresh state payload so the client can stay in sync 
 
 ## Hosting Notes
 - The SPA expects the API to live on the same origin. If you host the frontend elsewhere, set `window.__KANDID_API_BASE__ = 'https://your-api.example.com';` in `index.html` before loading `app.js`.
-- SQLite data persists to `data/kandid.sqlite` by default. Mount that folder to durable storage when deploying.
+- SQLite data persists to `data/kandid.sqlite` locally. In production the server automatically uses `/data/kandid.sqlite` when that directory is available (Render disk), so attach a persistent disk at `/data` to keep accounts between restarts.
 - For a quick deploy, push this folder to GitHub and use a service such as Render/Fly/Heroku for the API (build command `npm install`, start command `npm start`). Static hosts like Netlify can proxy to the API if you separate them.
 
 ## Security & Next Steps
