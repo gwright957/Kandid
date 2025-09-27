@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kandid</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app-root">
+    <header class="hero">
+      <div class="hero__content">
+        <h1>Kandid</h1>
+        <p class="tagline">Capture the moment. Share the vibe. Stay connected.</p>
+      </div>
+    </header>
+
+    <main>
+      <section id="auth"></section>
+      <section id="app" class="hidden">
+        <nav class="primary-nav">
+          <button data-view="nearby" class="nav-btn active">Nearby</button>
+          <button data-view="feed" class="nav-btn">Feed</button>
+          <button data-view="capture" class="nav-btn">Capture</button>
+          <button data-view="profile" class="nav-btn">Profile</button>
+          <button data-view="inbox" class="nav-btn">Inbox</button>
+          <button id="logout-nav" class="nav-btn nav-btn--logout">Log Out</button>
+        </nav>
+
+        <section id="view-nearby" class="view"></section>
+        <section id="view-feed" class="view hidden"></section>
+        <section id="view-capture" class="view hidden"></section>
+        <section id="view-profile" class="view hidden"></section>
+        <section id="view-inbox" class="view hidden"></section>
+      </section>
+    </main>
+  </div>
+
+  <template id="auth-template">
+    <div class="auth-card">
+      <div class="tabs">
+        <button data-tab="login" class="tab active">Log In</button>
+        <button data-tab="signup" class="tab">Sign Up</button>
+      </div>
+      <form id="login-form" class="auth-form">
+        <label>Email
+          <input type="email" name="email" required />
+        </label>
+        <label>Password
+          <input type="password" name="password" required minlength="6" />
+        </label>
+        <button type="submit" class="primary">Log In</button>
+      </form>
+      <form id="signup-form" class="auth-form hidden">
+        <label>Display Name
+          <input type="text" name="displayName" required />
+        </label>
+        <label>Bio
+          <textarea name="bio" rows="2" placeholder="Tell people about yourself"></textarea>
+        </label>
+        <label>Home City
+          <input type="text" name="homeCity" placeholder="Where are you based?" />
+        </label>
+        <label>Email
+          <input type="email" name="email" required />
+        </label>
+        <label>Password
+          <input type="password" name="password" required minlength="6" />
+        </label>
+        <label>Profile Photo
+          <input type="file" name="avatar" accept="image/*" />
+        </label>
+        <button type="submit" class="primary">Create Account</button>
+      </form>
+    </div>
+  </template>
+
+  <template id="nearby-template">
+    <div class="panel">
+      <header class="panel__header">
+        <h2>Nearby Creators</h2>
+        <button id="refresh-nearby" class="icon-btn" title="Refresh locations">↻</button>
+      </header>
+      <p class="panel__hint">Location data is simulated for this prototype. Enable geolocation for better accuracy.</p>
+      <ul class="list" id="nearby-list"></ul>
+    </div>
+  </template>
+
+  <template id="feed-template">
+    <div class="feed-header">
+      <h2>Live Feed</h2>
+      <div class="feed-filters">
+        <select id="feed-filter">
+          <option value="all">All Posts</option>
+          <option value="following">Following</option>
+          <option value="mine">My Posts</option>
+        </select>
+        <button id="refresh-feed" class="icon-btn" title="Refresh feed">↻</button>
+      </div>
+    </div>
+    <div id="feed-grid" class="feed-grid"></div>
+  </template>
+
+  <template id="capture-template">
+    <div class="capture-card">
+      <h2>Capture a Kandid</h2>
+      <p class="panel__hint">Upload or capture a candid moment to share it instantly.</p>
+      <form id="capture-form">
+        <label>Who did you spot?
+          <select id="capture-target" required></select>
+        </label>
+        <div class="capture-inputs">
+          <label class="capture-upload">
+            <span>Upload Photo</span>
+            <input type="file" id="capture-file" accept="image/*" />
+          </label>
+          <button type="button" id="capture-camera" class="secondary">Use Camera</button>
+        </div>
+        <label>Caption
+          <textarea id="capture-caption" rows="3" placeholder="What makes this moment special?"></textarea>
+        </label>
+        <label>
+          <input type="checkbox" id="capture-repost" checked /> Post to my feed
+        </label>
+        <button type="submit" class="primary">Send Kandid</button>
+      </form>
+      <video id="camera-stream" class="hidden" autoplay playsinline></video>
+      <canvas id="camera-canvas" class="hidden"></canvas>
+    </div>
+  </template>
+
+  <template id="profile-template">
+    <div class="profile">
+      <div class="profile__header">
+        <img id="profile-avatar" class="avatar" alt="Profile avatar" />
+        <div>
+          <h2 id="profile-name"></h2>
+          <p id="profile-bio" class="muted"></p>
+          <p id="profile-meta" class="muted"></p>
+        </div>
+        <div class="profile__actions">
+          <button id="profile-follow-toggle" class="primary profile-follow-btn hidden">Follow</button>
+          <button id="logout" class="secondary">Log Out</button>
+        </div>
+      </div>
+      <section class="profile__stats">
+        <div>
+          <strong id="profile-followers">0</strong>
+          <span>Followers</span>
+        </div>
+        <div>
+          <strong id="profile-following">0</strong>
+          <span>Following</span>
+        </div>
+        <div>
+          <strong id="profile-posts">0</strong>
+          <span>Posts</span>
+        </div>
+        <div>
+          <strong id="profile-reposts-count">0</strong>
+          <span>Reposts</span>
+        </div>
+      </section>
+      <section>
+        <h3 class="profile-section-title">Posts</h3>
+        <div id="profile-posts-grid" class="profile-grid"></div>
+      </section>
+      <section>
+        <h3 class="profile-section-title">Reposts</h3>
+        <div id="profile-reposts-grid" class="profile-grid"></div>
+      </section>
+      <section>
+        <h3 class="profile-section-title">People Followed</h3>
+        <ul id="profile-following-list" class="list"></ul>
+      </section>
+    </div>
+  </template>
+
+  <template id="inbox-template">
+    <div class="panel">
+      <header class="panel__header">
+        <h2>Direct Kandid Drops</h2>
+        <button id="clear-inbox" class="secondary">Mark all seen</button>
+      </header>
+      <ul id="inbox-list" class="list"></ul>
+    </div>
+  </template>
+
+  <template id="post-template">
+    <article class="post">
+      <div class="post__content">
+        <div class="post__main">
+          <header class="post__header">
+            <img class="avatar" data-avatar alt="" />
+            <div>
+              <p class="post__author" data-author></p>
+              <p class="post__meta" data-meta></p>
+            </div>
+            <button class="follow-btn" data-follow></button>
+          </header>
+          <img class="post__image" data-image alt="Candid moment" />
+          <div class="post__body">
+            <p class="post__caption" data-caption></p>
+          </div>
+        </div>
+        <aside class="post__aside">
+          <div class="post__actions">
+            <button class="icon-btn icon-btn--stack" data-like title="Like this post">♡ <span data-like-count>0</span></button>
+            <button class="icon-btn icon-btn--stack" data-repost title="Repost">↻</button>
+          </div>
+          <button type="button" class="secondary comment-toggle" data-comment-toggle>Show Comments (0)</button>
+          <section class="post__comments collapsed" data-comments>
+            <h4>Comments</h4>
+            <ul class="comment-list" data-comment-list></ul>
+            <form class="comment-form" data-comment-form>
+              <input type="text" data-comment-input placeholder="Add a comment..." maxlength="200" required />
+              <button type="submit" class="primary">Send</button>
+            </form>
+            <p class="comment-login muted hidden" data-comment-login>Log in to leave a comment.</p>
+          </section>
+        </aside>
+      </div>
+    </article>
+  </template>
+
+  <div id="photo-modal" class="lightbox hidden">
+    <div class="lightbox__overlay" data-close></div>
+    <div class="lightbox__dialog" role="dialog" aria-modal="true">
+      <button class="lightbox__close" data-close aria-label="Close photo">×</button>
+      <img id="lightbox-image" class="lightbox__image" alt="Kandid drop" />
+      <div class="lightbox__details">
+        <p id="lightbox-caption"></p>
+        <p id="lightbox-meta" class="muted"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
