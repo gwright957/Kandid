@@ -552,7 +552,6 @@ function setupFeedView() {
 
 function setupCaptureView() {
   const form = document.querySelector('#capture-form');
-  const fileInput = document.querySelector('#capture-file');
   const targetSelect = document.querySelector('#capture-target');
   const cameraBtn = document.querySelector('#capture-camera');
   const video = document.querySelector('#camera-stream');
@@ -564,7 +563,7 @@ function setupCaptureView() {
   const contestNote = document.querySelector('#contest-capture-note');
   const contestChallengeText = document.querySelector('#contest-challenge-text');
 
-  if (!form || !targetSelect || !fileInput) {
+  if (!form || !targetSelect) {
     return;
   }
 
@@ -596,12 +595,6 @@ function setupCaptureView() {
 
   refreshContestCaptureUI();
   window.__refreshContestCaptureUI = refreshContestCaptureUI;
-
-  fileInput.addEventListener('change', () => {
-    state.cameraImage = null;
-    stopCamera(video);
-    canvas.classList.add('hidden');
-  });
 
   targetSelect.addEventListener('change', () => {
     refreshContestCaptureUI();
@@ -635,17 +628,10 @@ function setupCaptureView() {
       return;
     }
 
-    let imageData = null;
-
-    if (state.cameraImage) {
-      imageData = state.cameraImage;
-    } else {
-      const file = fileInput.files[0];
-      if (!file) {
-        alert('Add a photo.');
-        return;
-      }
-      imageData = await fileToDataURL(file);
+    const imageData = state.cameraImage;
+    if (!imageData) {
+      alert('Use the camera to capture a photo before sending.');
+      return;
     }
 
     submitBtn?.setAttribute('disabled', 'true');
@@ -664,9 +650,11 @@ function setupCaptureView() {
         api.createPost(payload)
       );
       state.cameraImage = null;
-      fileInput.value = '';
       if (captionField) captionField.value = '';
       form.reset();
+      if (canvas) {
+        canvas.classList.add('hidden');
+      }
       populateTargetSelect(targetSelect);
       refreshContestCaptureUI();
       alert('Kandid sent!');
